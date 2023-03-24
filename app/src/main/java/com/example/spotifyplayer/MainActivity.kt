@@ -11,7 +11,9 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.Button
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
@@ -40,6 +42,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Objects
+import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
     private val CLIENT_ID = "9adc315ded0746659f31baa5226bdcbb"
@@ -118,13 +122,33 @@ class MainActivity : ComponentActivity() {
                 var isPaused by remember {
                     mutableStateOf(false)
                 }
-                var listOfItems: List<ListItem> by remember {
-                    mutableStateOf(emptyList())
+                var listOfItems = remember {
+                    mutableStateListOf<Pair<String, String>>()
                 }
                 val playerState = spotifyControl.playerApi.subscribeToPlayerState()
                 playerState.setEventCallback {
                     isPaused = it.isPaused
                 }
+                var isFirstLoad by remember {
+                    mutableStateOf(true)
+                }
+                val listState = rememberLazyListState()
+                fun LazyListState.isScrolledToTheEnd() =
+                    layoutInfo.visibleItemsInfo.lastOrNull()?.index == listOfItems.size - 1
+                if (listState.isScrolledToTheEnd() || isFirstLoad) {
+                    isFirstLoad = false
+                    runBlocking {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            // TODO: get available genre seeds
+                            val genreSeeds: List<String> = getGenreSeeds(token!!)
+                            // TODO: get recommended items for LazyColumn
+                            val genre = genreSeeds[Random.nextInt(0, genreSeeds.size - 1)]
+                            println(genre)
+                            listOfItems.addAll(getTracks(genre, token!!))
+                        }
+                    }
+                }
+
                 SpotifyPlayerTheme {
                     // A surface container using the 'background' color from the theme
                     Surface(
@@ -138,69 +162,81 @@ class MainActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            runBlocking {
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    // TODO: get available genre seeds
-                                    val genreSeeds: List<String> = getGenreSeeds(token!!)
-                                    // TODO: get recommended items for LazyColumn
-//                                    val url = URL("https://api.spotify.com/v1/recommendations?seed_genres=country").openConnection()
-//                                    url.setRequestProperty("Authorization", "Bearer $token")
-//                                    url.setRequestProperty("Content-Type", "application/json")
-//                                    url.doInput = true
-//                                    val inputStream = url.getInputStream()
-//                                    val data = inputStream.bufferedReader().use { it.readText() }
-//                                    println(data)
-                                }
-                            }
-                        }
-                        LazyColumn(horizontalAlignment = Alignment.CenterHorizontally) {
-                            itemsIndexed(listOfItems) { index, item ->
-                                if (item.uri.contains("track") || item.uri.contains("playlist")) {
-                                    Button(onClick = {
-                                        runBlocking {
-                                            CoroutineScope(Dispatchers.IO).launch {
-                                                if (item.playable) {
-                                                    spotifyControl.playerApi.play(item.uri)
+                            LazyColumn(
+                                state = listState,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                itemsIndexed(listOfItems) { index, item ->
+                                    if (item.second.contains("track")) {
+                                        Button(onClick = {
+                                            runBlocking {
+                                                CoroutineScope(Dispatchers.IO).launch {
+                                                    spotifyControl.playerApi.play(item.second)
                                                 }
                                             }
+                                        }) {
+                                            Text(item.first)
                                         }
-                                    }) {
-                                        Text(item.title)
                                     }
                                 }
                             }
                         }
-                    }
-                    Column(
-                        Modifier
-                            .fillMaxWidth(1f)
-                            .fillMaxHeight(0.5f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Bottom
-                    ) {
-                        Row(
+                        Column(
                             Modifier
                                 .fillMaxWidth(1f)
-                                .height(50.dp)
-                                .background(Color.LightGray),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                                .fillMaxHeight(0.5f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom
                         ) {
-                            Button(onClick = {
-                                runBlocking {
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        if (isPaused) {
-                                            spotifyControl.playerApi.resume()
-                                        } else {
-                                            spotifyControl.playerApi.pause()
+                            Row(
+                                Modifier
+                                    .fillMaxWidth(1f)
+                                    .height(50.dp)
+                                    .background(Color.LightGray),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(onClick = {
+                                    runBlocking {
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            if (isPaused) {
+                                                spotifyControl.playerApi.resume()
+                                            } else {
+                                                spotifyControl.playerApi.pause()
+                                            }
                                         }
                                     }
+                                }) {
+                                    if (isPaused) {
+                                        Text("Play")
+                                    } else {
+                                        Text("Pause")
+                                    }
                                 }
-                            }) {
-                                if (isPaused) {
-                                    Text("Play")
-                                } else {
-                                    Text("Pause")
+                                Button(onClick = {
+                                    runBlocking {
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            val genreSeeds: List<String> = getGenreSeeds(token!!)
+                                            // TODO: get recommended items for LazyColumn
+                                            val genre =
+                                                genreSeeds[Random.nextInt(0, genreSeeds.size - 1)]
+                                            listOfItems.clear()
+                                            listOfItems.addAll(getTracks(genre, token!!))
+                                        }
+                                    }
+                                }) {
+                                    Text("Refresh")
+                                }
+                                Button(onClick = {
+                                    runBlocking {
+                                        CoroutineScope(Dispatchers.Default).launch {
+                                            val nextTrack = listOfItems[0]
+                                            spotifyControl.playerApi.play(nextTrack.second)
+                                            listOfItems.removeAt(0)
+                                        }
+                                    }
+                                }) {
+                                    Text("Next")
                                 }
                             }
                         }
@@ -232,24 +268,61 @@ class ConnectListener(val onConnectCallback: (SpotifyAppRemote) -> Unit) :
 }
 
 fun getGenreSeeds(token: String): List<String> {
-    val url = URL("https://api.spotify.com/v1/recommendations/available-genre-seeds").openConnection() as HttpURLConnection
+    val url =
+        URL("https://api.spotify.com/v1/recommendations/available-genre-seeds").openConnection() as HttpURLConnection
     url.setRequestProperty("Content-Type", "application/json")
     url.setRequestProperty("Authorization", "Bearer $token")
     url.setRequestProperty("Accept", "application/json")
     url.doInput = true
     val data = url.inputStream.bufferedReader().use { it.readText() }
-    println(data)
+    val genre: Genre
+
     try {
-        val jsonData: String? = Gson().toJson(data)
-        println(jsonData)
-
-    } catch(ex: Exception) {
-        ex.printStackTrace()
+        genre = Gson().fromJson(data, Genre::class.java)
+        return genre.genres
+    } catch (ex: Exception) {
+        throw ex
     }
+}
 
-    return listOf()
+fun getTracks(genre: String, token: String): List<Pair<String, String>> {
+    val artistSeed: String = "4NHQUGzhtTLFvgF5SZesLK"
+    val trackSeed: String = "0c6xIDDpzE81m2q797ordA"
+    val url =
+        URL("https://api.spotify.com/v1/recommendations?seed_genres=$genre&seed_artists=$artistSeed&seed_tracks=$trackSeed").openConnection() as HttpURLConnection
+    url.setRequestProperty("Content-Type", "application/json")
+    url.setRequestProperty("Accept", "application/json")
+    url.setRequestProperty("Authorization", "Bearer $token")
+    url.doInput = true
+    val data = url.inputStream.bufferedReader().use { it.readText() }
+    val recommendation: Recommendation
+
+    try {
+        recommendation = Gson().fromJson(data, Recommendation::class.java)
+        val trackUris: MutableList<Pair<String, String>> = mutableListOf()
+        recommendation.tracks.forEach {
+            trackUris.add(Pair(it.name, it.uri))
+        }
+        return trackUris
+    } catch (ex: Exception) {
+        throw ex
+    }
 }
 
 data class Genre(
-    @SerializedName("genres") var genres : ArrayList<String> = arrayListOf()
+    @SerializedName("genres") var genres: ArrayList<String> = arrayListOf()
+)
+
+data class Recommendation(
+    @SerializedName("seeds") var seeds: ArrayList<Any> = arrayListOf(),
+    @SerializedName("tracks") var tracks: ArrayList<Tracks> = arrayListOf()
+)
+
+data class Tracks(
+    @SerializedName("album") var album: Any,
+    @SerializedName("artists") var artists: ArrayList<Any> = arrayListOf(),
+    @SerializedName("name") var name: String = "",
+    @SerializedName("track_number") var trackNumber: Int,
+    @SerializedName("type") var type: String = "",
+    @SerializedName("uri") var uri: String = ""
 )

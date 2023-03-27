@@ -21,7 +21,11 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import com.example.spotifyplayer.ui.theme.SpotifyPlayerTheme
 import com.example.spotifyplayer.utils.RecommendedUtils
@@ -122,7 +126,7 @@ class MainActivity : ComponentActivity() {
                 var isPaused by remember {
                     mutableStateOf(false)
                 }
-                var listOfItems = remember {
+                val listOfItems = remember {
                     mutableStateListOf<Pair<String, String>>()
                 }
                 val playerState = spotifyControl.playerApi.subscribeToPlayerState()
@@ -133,9 +137,11 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(true)
                 }
                 val listState = rememberLazyListState()
-                fun LazyListState.isScrolledToTheEnd() =
-                    layoutInfo.visibleItemsInfo.lastOrNull()?.index == listOfItems.size - 1
-                if (listState.isScrolledToTheEnd() || isFirstLoad) {
+                fun LazyListState.isScrolledToEnd(): Boolean {
+                    return layoutInfo.visibleItemsInfo.lastOrNull()?.index == listOfItems.size - 1
+                }
+
+                if (listState.isScrolledToEnd() || isFirstLoad) {
                     isFirstLoad = false
                     runBlocking {
                         CoroutineScope(Dispatchers.IO).launch {
@@ -143,7 +149,6 @@ class MainActivity : ComponentActivity() {
                             val genreSeeds: List<String> = getGenreSeeds(token!!)
                             // TODO: get recommended items for LazyColumn
                             val genre = genreSeeds[Random.nextInt(0, genreSeeds.size - 1)]
-                            println(genre)
                             listOfItems.addAll(getTracks(genre, token!!))
                         }
                     }

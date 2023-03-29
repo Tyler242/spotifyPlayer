@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colors.background
                 ) {
                     Text("Connecting to Spotify")
+
                 }
             }
         }

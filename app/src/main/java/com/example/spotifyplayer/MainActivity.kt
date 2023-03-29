@@ -7,7 +7,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,22 +20,15 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import com.example.spotifyplayer.ui.theme.SpotifyPlayerTheme
-import com.example.spotifyplayer.utils.RecommendedUtils
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
-import com.spotify.android.appremote.api.ContentApi
 import com.spotify.android.appremote.api.SpotifyAppRemote
-import com.spotify.protocol.types.ListItem
-import com.spotify.protocol.types.ListItems
+import com.spotify.protocol.types.Artist
 import com.spotify.sdk.android.auth.AuthorizationClient
 import com.spotify.sdk.android.auth.AuthorizationRequest
 import com.spotify.sdk.android.auth.AuthorizationResponse
@@ -46,12 +38,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Objects
 import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
     private val CLIENT_ID = "9adc315ded0746659f31baa5226bdcbb"
-    private val REDIRECT_URI = "integratespotify://callback"
+    private val REDIRECT_URI = "spotifyplayer://callback"
     private var token: String? = null
     private val context = this
     private val startForResult =
@@ -126,8 +117,8 @@ class MainActivity : ComponentActivity() {
                 var isPaused by remember {
                     mutableStateOf(false)
                 }
-                val listOfItems = remember {
-                    mutableStateListOf<Pair<String, String>>()
+                val listOfTracks = remember {
+                    mutableStateListOf<Track>()
                 }
                 val playerState = spotifyControl.playerApi.subscribeToPlayerState()
                 playerState.setEventCallback {
@@ -138,7 +129,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val listState = rememberLazyListState()
                 fun LazyListState.isScrolledToEnd(): Boolean {
-                    return layoutInfo.visibleItemsInfo.lastOrNull()?.index == listOfItems.size - 1
+                    return layoutInfo.visibleItemsInfo.lastOrNull()?.index == listOfTracks.size - 1
                 }
 
                 if (listState.isScrolledToEnd() || isFirstLoad) {
@@ -149,13 +140,12 @@ class MainActivity : ComponentActivity() {
                             val genreSeeds: List<String> = getGenreSeeds(token!!)
                             // TODO: get recommended items for LazyColumn
                             val genre = genreSeeds[Random.nextInt(0, genreSeeds.size - 1)]
-                            listOfItems.addAll(getTracks(genre, token!!))
+                            listOfTracks.addAll(getTracks(genre, token!!))
                         }
                     }
                 }
 
                 SpotifyPlayerTheme {
-                    // A surface container using the 'background' color from the theme
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colors.background
@@ -163,24 +153,40 @@ class MainActivity : ComponentActivity() {
                         Column(
                             Modifier
                                 .fillMaxWidth(1f)
-                                .fillMaxHeight(0.5f),
+                                .height(100.dp)
+                                .background(Color.LightGray),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
+                            if (listOfTracks.size > 0) {
+                                Text("${listOfTracks[0].name}")
+                                Text("Artist")
+                            } else Text("Loading tracks")
+                        }
+                        Column(
+                            Modifier
+                                .fillMaxWidth(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom
+                        ) {
                             LazyColumn(
+                                Modifier
+                                    .fillMaxWidth(1f)
+                                    .height(400.dp)
+                                    .background(Color.Cyan),
                                 state = listState,
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                itemsIndexed(listOfItems) { index, item ->
-                                    if (item.second.contains("track")) {
+                                itemsIndexed(listOfTracks) { index, item ->
+                                    if (item.uri.contains("track")) {
                                         Button(onClick = {
                                             runBlocking {
                                                 CoroutineScope(Dispatchers.IO).launch {
-                                                    spotifyControl.playerApi.play(item.second)
+                                                    spotifyControl.playerApi.play(item.uri)
                                                 }
                                             }
                                         }) {
-                                            Text(item.first)
+                                            Text(item.name)
                                         }
                                     }
                                 }
@@ -189,7 +195,7 @@ class MainActivity : ComponentActivity() {
                         Column(
                             Modifier
                                 .fillMaxWidth(1f)
-                                .fillMaxHeight(0.5f),
+                                .height(50.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Bottom
                         ) {
@@ -225,8 +231,8 @@ class MainActivity : ComponentActivity() {
                                             // TODO: get recommended items for LazyColumn
                                             val genre =
                                                 genreSeeds[Random.nextInt(0, genreSeeds.size - 1)]
-                                            listOfItems.clear()
-                                            listOfItems.addAll(getTracks(genre, token!!))
+                                            listOfTracks.clear()
+                                            listOfTracks.addAll(getTracks(genre, token!!))
                                         }
                                     }
                                 }) {
@@ -235,9 +241,9 @@ class MainActivity : ComponentActivity() {
                                 Button(onClick = {
                                     runBlocking {
                                         CoroutineScope(Dispatchers.Default).launch {
-                                            val nextTrack = listOfItems[0]
-                                            spotifyControl.playerApi.play(nextTrack.second)
-                                            listOfItems.removeAt(0)
+                                            listOfTracks.removeAt(0)
+                                            val nextTrack = listOfTracks[0]
+                                            spotifyControl.playerApi.play(nextTrack.uri)
                                         }
                                     }
                                 }) {
@@ -290,7 +296,7 @@ fun getGenreSeeds(token: String): List<String> {
     }
 }
 
-fun getTracks(genre: String, token: String): List<Pair<String, String>> {
+fun getTracks(genre: String, token: String): List<Track> {
     val artistSeed: String = "4NHQUGzhtTLFvgF5SZesLK"
     val trackSeed: String = "0c6xIDDpzE81m2q797ordA"
     val url =
@@ -304,11 +310,26 @@ fun getTracks(genre: String, token: String): List<Pair<String, String>> {
 
     try {
         recommendation = Gson().fromJson(data, Recommendation::class.java)
-        val trackUris: MutableList<Pair<String, String>> = mutableListOf()
-        recommendation.tracks.forEach {
-            trackUris.add(Pair(it.name, it.uri))
-        }
-        return trackUris
+        return recommendation.tracks
+    } catch (ex: Exception) {
+        throw ex
+    }
+}
+
+fun getCurrentlyPlaying(token: String): Track {
+    val currentPlaying: CurrentPlaying
+    val endpoint = "https://api.spotify.com/v1/me/player/currently-playing"
+    val url = URL(endpoint).openConnection() as HttpURLConnection
+    url.setRequestProperty("Content-Type", "application/json")
+    url.setRequestProperty("Accept", "application/json")
+    url.setRequestProperty("Authorization", "Bearer $token")
+    url.doInput = true
+    val data = url.inputStream.bufferedReader().use { it.readText() }
+    println(data)
+
+    try {
+        currentPlaying = Gson().fromJson(data, CurrentPlaying::class.java)
+        return currentPlaying.item
     } catch (ex: Exception) {
         throw ex
     }
@@ -320,14 +341,18 @@ data class Genre(
 
 data class Recommendation(
     @SerializedName("seeds") var seeds: ArrayList<Any> = arrayListOf(),
-    @SerializedName("tracks") var tracks: ArrayList<Tracks> = arrayListOf()
+    @SerializedName("tracks") var tracks: ArrayList<Track> = arrayListOf()
 )
 
-data class Tracks(
+data class Track(
     @SerializedName("album") var album: Any,
-    @SerializedName("artists") var artists: ArrayList<Any> = arrayListOf(),
+    @SerializedName("artists") var artists: ArrayList<Artist> = arrayListOf(),
     @SerializedName("name") var name: String = "",
     @SerializedName("track_number") var trackNumber: Int,
     @SerializedName("type") var type: String = "",
     @SerializedName("uri") var uri: String = ""
+)
+
+data class CurrentPlaying(
+    @SerializedName("item") var item: Track
 )

@@ -2,4 +2,5 @@
     <string name="app_name">spotifyPlayer</string>
     <string name="title_activity_play_list.kt">PlayList.kt</string>
     <string name="title_activity_play_list2">PlayList2</string>
+    <string name="title_activity_genre_ui">GenreUI</string>
 </resources>

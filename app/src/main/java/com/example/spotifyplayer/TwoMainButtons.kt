@@ -20,13 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.spotifyplayer.ui.theme.SpotifyPlayerTheme
 
-class PlayList : ComponentActivity() {
+class TwoMainButtons : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -43,7 +42,7 @@ class PlayList : ComponentActivity() {
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = {
-                                val navigate = Intent(this@PlayList, PlayList2::class.java)
+                                val navigate = Intent(this@TwoMainButtons, GenreUI::class.java)
                                 startActivity(navigate)
                             }) {
                                 Icon(
@@ -54,7 +53,7 @@ class PlayList : ComponentActivity() {
                             }
                             TwoButton()
                             IconButton(onClick = {
-                                val navigate = Intent(this@PlayList, PlayList2::class.java)
+                                val navigate = Intent(this@TwoMainButtons, PlayList::class.java)
                                 startActivity(navigate)
                             }) {
                                 Icon(

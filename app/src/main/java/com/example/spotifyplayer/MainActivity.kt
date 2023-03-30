@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -21,7 +22,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.spotifyplayer.ui.theme.SpotifyPlayerTheme
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
@@ -128,6 +132,9 @@ class MainActivity : ComponentActivity() {
                 var isFirstLoad by remember {
                     mutableStateOf(true)
                 }
+                var currentTrack by remember {
+                    mutableStateOf(Track(Album(arrayListOf(ImageObject("none", 0, 0))), trackNumber = 0, name = "loading"))
+                }
                 val listState = rememberLazyListState()
                 fun LazyListState.isScrolledToEnd(): Boolean {
                     return layoutInfo.visibleItemsInfo.lastOrNull()?.index == listOfTracks.size - 1
@@ -151,19 +158,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colors.background
                     ) {
-                        Column(
-                            Modifier
-                                .fillMaxWidth(1f)
-                                .height(100.dp)
-                                .background(Color.LightGray),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            if (listOfTracks.size > 0) {
-                                Text("${listOfTracks[0].name}")
-                                Text("Artist")
-                            } else Text("Loading tracks")
-                        }
+                        Header(title = currentTrack.name, imgUrl = currentTrack.album.images[0].url)
                         Column(
                             Modifier
                                 .fillMaxWidth(1f),
@@ -180,15 +175,14 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 itemsIndexed(listOfTracks) { index, item ->
                                     if (item.uri.contains("track")) {
-                                        Button(onClick = {
+                                        Page3(title = item.name, author = item.artists[0].name, onClick = {
                                             runBlocking {
                                                 CoroutineScope(Dispatchers.IO).launch {
                                                     spotifyControl.playerApi.play(item.uri)
+                                                    currentTrack = item
                                                 }
                                             }
-                                        }) {
-                                            Text(item.name)
-                                        }
+                                        })
                                     }
                                 }
                             }
@@ -234,6 +228,7 @@ class MainActivity : ComponentActivity() {
                                                 genreSeeds[Random.nextInt(0, genreSeeds.size - 1)]
                                             listOfTracks.clear()
                                             listOfTracks.addAll(getTracks(genre, token!!))
+                                            currentTrack = listOfTracks[0]
                                         }
                                     }
                                 }) {
@@ -245,6 +240,7 @@ class MainActivity : ComponentActivity() {
                                             listOfTracks.removeAt(0)
                                             val nextTrack = listOfTracks[0]
                                             spotifyControl.playerApi.play(nextTrack.uri)
+                                            currentTrack = nextTrack
                                         }
                                     }
                                 }) {
@@ -317,25 +313,6 @@ fun getTracks(genre: String, token: String): List<Track> {
     }
 }
 
-fun getCurrentlyPlaying(token: String): Track {
-    val currentPlaying: CurrentPlaying
-    val endpoint = "https://api.spotify.com/v1/me/player/currently-playing"
-    val url = URL(endpoint).openConnection() as HttpURLConnection
-    url.setRequestProperty("Content-Type", "application/json")
-    url.setRequestProperty("Accept", "application/json")
-    url.setRequestProperty("Authorization", "Bearer $token")
-    url.doInput = true
-    val data = url.inputStream.bufferedReader().use { it.readText() }
-    println(data)
-
-    try {
-        currentPlaying = Gson().fromJson(data, CurrentPlaying::class.java)
-        return currentPlaying.item
-    } catch (ex: Exception) {
-        throw ex
-    }
-}
-
 data class Genre(
     @SerializedName("genres") var genres: ArrayList<String> = arrayListOf()
 )
@@ -346,7 +323,7 @@ data class Recommendation(
 )
 
 data class Track(
-    @SerializedName("album") var album: Any,
+    @SerializedName("album") var album: Album,
     @SerializedName("artists") var artists: ArrayList<Artist> = arrayListOf(),
     @SerializedName("name") var name: String = "",
     @SerializedName("track_number") var trackNumber: Int,
@@ -354,6 +331,45 @@ data class Track(
     @SerializedName("uri") var uri: String = ""
 )
 
+data class Album(
+    @SerializedName("images") var images: ArrayList<ImageObject>
+)
+
+data class ImageObject(
+    @SerializedName("url") var url: String,
+    @SerializedName("height") var height: Int,
+    @SerializedName("width") var width: Int
+)
+
 data class CurrentPlaying(
     @SerializedName("item") var item: Track
 )
+
+@Composable
+fun Header(title: String, imgUrl: String) {
+    Column(
+        Modifier
+            .height(300.dp)
+            .fillMaxSize(1f)
+            .background(Color.Gray),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Top
+    ) {
+        Spacer(Modifier.height(75.dp))
+        AsyncImage(
+            model = imgUrl,
+            contentDescription = "Cat Picture",
+            modifier = Modifier.height(150.dp),
+            alignment = Alignment.Center
+        )
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = title,
+            modifier = Modifier
+                .height(35.dp)
+                .border(1.dp, Color.Blue, RectangleShape),
+            fontSize = 24.sp
+        )
+        Spacer(Modifier.height(20.dp))
+    }
+}
